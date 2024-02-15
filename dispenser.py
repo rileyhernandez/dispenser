@@ -132,12 +132,15 @@ class Dispenser:
             weights = [self.data['weight'][weight]-avg for weight in range(len(self.data['weight']))]
         else:
             weights = self.data['weight']
+        plt.close()
         plt.plot(times, weights)
-        plt.xlabel('Time [seconds]')
-        plt.ylabel('Weight [grams]')
-        plt.title('Weight vs Time')
+        plt.xlabel('Time')
+        plt.ylabel('Average Weight')
+        plt.title('Average Weight vs Time')
         plt.grid()
-        plt.show()
+        plt.savefig('data.png')
+        print("STD: ", np.std(self.data['weight']))
+        print('Range: +/-', (max(self.data['weight'])-min(self.data['weight']))/2)
 
     def reset_data(self):
         """Clears the dataset
@@ -155,23 +158,32 @@ class Dispenser:
             self.data['weight'] += [weight]
             time.sleep(timestep)
     
-    async def test_avg(self, timestep=0.1, samples=100, outliers_removed=2, n=10):
+    async def test_avg(self, t=10, sample_rate=25, samples=100, outlier_ratio=0.50):
         """Collects data over an inputted amount of samples recording each data point
         as the average of the last 10 weights and removing outliers"""
-        def prune(weights, outliers_removed):
+        
+        def prune(data_set, ratio=outlier_ratio):
+            """Function that takes in a data set and returns the average, excluding the amount
+            of outliers specified.
+            """
             outliers = []
-            for i in range(outliers_removed):
-                outliers += [max(weights), min(weights)]
-            return (sum(weights)-sum(outliers))/(len(weights)-len(outliers))
+            for _ in range(int(ratio*len(data_set)/2)):
+                outliers += [max(data_set), min(data_set)]
+            weight = (sum(data_set)-sum(outliers))/(len(data_set)-len(outliers))
+            return weight
         self.reset_data()
         last_n = []
-        for i in range(n):
+        for _ in range(samples):
             now = await self.live_weigh()
             last_n += [now]
-            time.sleep(timestep)
-        for i in range(samples):
+            time.sleep(1/sample_rate)
+        for _ in range(t*sample_rate):
             curr_weight = await self.live_weigh()
             last_n = last_n[1:] + [curr_weight]
-            avg = prune(last_n, outliers_removed)
+            try:
+                avg = prune(last_n)
+            except:
+                print("DEBUG 1: ", last_n)
+                return
             self.log_data(time.time(), avg)
-            time.sleep(timestep)
+            time.sleep(1/sample_rate)
