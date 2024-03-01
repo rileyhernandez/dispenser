@@ -1,20 +1,24 @@
-import asyncio
+import asyncio, time
 import numpy as np
 import matplotlib.pyplot as plt
-from STF06_IP import STF
 from load_cell import LoadCell
-from dispenser import Dispenser
 
-a = lambda f, x: asyncio.run(f(x))
+scale = LoadCell()
 
-# motor = STF('192.168.1.10', 200, 2)
-# asyncio.run(motor.set_power(1))
+start_time = time.time()
+print(f'Weight: {asyncio.run(scale.weigh()):.1f}g')
+end_time = time.time()
+print(f'Time elapsed: {end_time-start_time:.1f} s')
 
-print('Running...')
-# d = Dispenser(motor, [LoadCell(i) for i in range(4)])
+scale.plot()
 
-d = Dispenser('filler', [LoadCell(i) for i in range(4)])
-# asyncio.run(d.tare())
+def plot(data):
+    plt.close()
+    plt.plot(data)
+    plt.grid()
+    plt.savefig('data.png')
 
-asyncio.run(d.test_avg(t=10))
-d.plot_data()
+# weights = []
+# for _ in range(10):
+#     weight = asyncio.run(scale.weigh())
+#     weights += [weight]
