@@ -1,24 +1,30 @@
-import asyncio, time
-import numpy as np
-import matplotlib.pyplot as plt
-from load_cell import LoadCell
+import asyncio
+from Scale import Scale
+from ClearCore import ClearCore
+from dispenser import Dispenser
+import scipy.signal as signal
 
-scale = LoadCell()
+s = Scale(716692)
 
-start_time = time.time()
-print(f'Weight: {asyncio.run(scale.weigh()):.1f}g')
-end_time = time.time()
-print(f'Time elapsed: {end_time-start_time:.1f} s')
+# m = ClearCore('192.168.1.11', 6400)
+m=[]
 
-scale.plot()
+d = Dispenser(m, s)
 
-def plot(data):
-    plt.close()
-    plt.plot(data)
-    plt.grid()
-    plt.savefig('data.png')
+run = lambda x: asyncio.run(d.dispense(x, offset=5))
 
-# weights = []
-# for _ in range(10):
-#     weight = asyncio.run(scale.weigh())
-#     weights += [weight]
+kill = lambda: asyncio.run(m.stop())
+def kill():
+    print(':( oops...')
+    asyncio.run(m.stop())
+    asyncio.run(m.disable())
+
+def end():
+    kill()
+    exit()
+
+def test(dispenser: Dispenser, n=10, w=2):
+    sig = dispenser.data['weight']
+    sos = signal.butter(N=n, Wn=w, output='sos')
+    dispenser.data['filtered'] = signal.sosfiltfilt(sos, sig)
+    dispenser.plot_data(data='filtered')

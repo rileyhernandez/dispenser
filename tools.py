@@ -1,4 +1,4 @@
-def prune(data_set, outlier_ratio):
+def prune(data_set, outlier_ratio=0.5):
     """Function that takes in a data set and returns the average, excluding the amount
     of outliers specified.
     """
