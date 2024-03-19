@@ -3,13 +3,14 @@ from typing_extensions import Self
 from tcp_client import tcp_write
 import asyncio
 
-HEADER = '\x02M0'
+HEADER = '\x02M'
 CR = '\x13'
 DRIVE_TCP_PORT = 8888
 
 class ClearCore:
-    def __init__(self, ip_address, steps):
+    def __init__(self, ip_address, motor_id, steps):
         self.ip_address = ip_address
+        self.motor_id = str(motor_id)
         self.steps = steps
         self.last_pos = 0.0
         asyncio.run(self.enable())
@@ -17,10 +18,10 @@ class ClearCore:
     async def drive_write(self, cmd, amt:str='') -> str:
         """ Takes commands and sends them as messages to the motor.
         """
-        message = HEADER + cmd + str(amt) + CR
+        message = HEADER + self.motor_id + cmd + str(amt) + CR
         resp = await tcp_write(self.ip_address, DRIVE_TCP_PORT, message)
         # print(resp)
-        if resp == HEADER+'63':
+        if resp == HEADER+self.motor_id+'63':
             raise Exception(f'Invalid message sent to drive: {message} Resp: {resp}')
         return resp
     
@@ -38,6 +39,10 @@ class ClearCore:
         resp = await self.drive_write('GS')
         return resp
     
+    async def clear(self):
+        resp = await self.drive_write('CA')
+        return resp
+
     async def go_for(self, rpm: float, revolutions: float, *, extra: Optional[Dict[str, Any]] = None,
                      timeout: Optional[float] = None, **kwargs):
         await self.change_speed(rpm)

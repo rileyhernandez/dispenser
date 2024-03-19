@@ -6,8 +6,7 @@ import scipy.signal as signal
 
 s = Scale(716692)
 
-# m = ClearCore('192.168.1.11', 6400)
-m=[]
+m = ClearCore('192.168.1.11', 0, 6400)
 
 d = Dispenser(m, s)
 
