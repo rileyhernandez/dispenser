@@ -4,6 +4,7 @@ from tools import prune, dot_product
 import numpy as np
 import matplotlib.pyplot as plt
 import asyncio
+import csv
 
 class Scale:
     def __init__(self, SIN):
@@ -13,9 +14,23 @@ class Scale:
             self.cells[cell].setChannel(cell)
             self.cells[cell].openWaitForAttachment(1000)
             self.cells[cell].setDataInterval(self.cells[cell].getMinDataInterval())
-        self.offset = 2920
-        self.coefficients = [1.10669791e+07, 2.53250106e+06, 1.21621447e+07, 9.56128040e+06, -3.42132575e+03]
+        self.offset = 4122.65
         self.data = {'c0':[], 'c1':[], 'c2':[], 'c3':[], 'weights':[]}
+        self.import_coefficients()
+
+    def import_coefficients(self):
+        with open('scale_coefficients.csv', newline='') as f:
+            reader = csv.reader(f)
+            data = list(reader)[0]
+        coefficients = [float(i) for i in data]
+        self.coefficients = coefficients
+    
+    def write_coefficients(self):
+        new_coefficients = [self.coefficients]
+        with open('scale_coefficients.csv', 'wt') as fp:
+            writer = csv.writer(fp, delimiter=',')
+            writer.writerows(new_coefficients)
+
 
     async def get_readings(self):
         coros = [self.get_cell_reading(cell) for cell in range(len(self.cells))]
@@ -35,6 +50,15 @@ class Scale:
             await asyncio.sleep(1/sample_rate)
         avg = prune(readings, outliers_ratio)
         return avg
+    
+    async def get_cell_median(self, cell, samples=1000, sample_rate=50):
+        readings = []
+        for _ in range(samples):
+            reading = await self.get_cell_reading(cell)
+            readings += [reading]
+            await asyncio.sleep(1/sample_rate)
+        med = np.median(readings)
+        return med
 
     async def live_weigh(self):
         """Measures instantaneous weight
@@ -46,13 +70,13 @@ class Scale:
         # Returns weight minus offset (from tare)
         return weight-self.offset
 
-    async def weigh(self, samples=100, sample_rate=25, outliers_ratio=0.50):
+    async def weigh(self, samples=100, sample_rate=50):
         """Takes the average weight over a given time period for a given number of samples
         at a given sample rate while removing outliers
         """
-        coros = [self.get_cell_average(cell,samples,sample_rate,outliers_ratio) for cell in range(len(self.cells))]
-        average_readings = await asyncio.gather(*coros)
-        weight = dot_product(average_readings, self.coefficients)
+        coros = [self.get_cell_median(cell,samples,sample_rate) for cell in range(len(self.cells))]
+        median_readings = await asyncio.gather(*coros)
+        weight = dot_product(median_readings, self.coefficients)
         return weight-self.offset
     
     async def calibrate(self, test_mass=393.8):
@@ -62,12 +86,12 @@ class Scale:
         """
         # Conducts weight trials and collects data
         A, b = [], []
-        for trial in range(len(self.cells)):
+        for _ in range(len(self.cells)):
             try:
                 input('Place/move test mass and press Enter')
             except(Exception, KeyboardInterrupt):
                 pass
-            coros = [self.get_cell_average(cell) for cell in range(len(self.cells))]
+            coros = [self.get_cell_median(cell) for cell in range(len(self.cells))]
             trial_readings = await asyncio.gather(*coros)
             trial_readings += [1]
             A += [trial_readings]
@@ -77,7 +101,7 @@ class Scale:
         except(Exception, KeyboardInterrupt):
             pass
         # Conducts final trial (no weight)
-        coros = [self.get_cell_average(cell) for cell in range(len(self.cells))]
+        coros = [self.get_cell_median(cell) for cell in range(len(self.cells))]
         trial_readings = await asyncio.gather(*coros)
         trial_readings += [1]
         A += [trial_readings]
@@ -89,10 +113,11 @@ class Scale:
         # Converts x into a list and saves it as an attribute
         x.reshape(1, -1).tolist()[0]
         self.coefficients = [list(i)[0] for i in x]
+        self.write_coefficients()
 
         # Tares scale and ends method
         # await self.tare()
-        self.offset = await self.weigh()
+        # self.offset = await self.weigh()
         return 'Calibration Successful'
     
     async def tare(self):
