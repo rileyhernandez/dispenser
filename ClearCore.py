@@ -13,7 +13,6 @@ class ClearCore:
         self.motor_id = str(motor_id)
         self.steps = steps
         self.last_pos = 0.0
-        asyncio.run(self.enable())
 
     async def drive_write(self, cmd, amt:str='') -> str:
         """ Takes commands and sends them as messages to the motor.

@@ -26,6 +26,7 @@ class Dispenser:
         """
         msg = await self.scale.calibrate()
         print(msg)
+        await self.tare()
 
     
     async def get_average_readings(self):
@@ -63,6 +64,9 @@ class Dispenser:
         target = init_weight-serving
         passed = 0
         start_time = time.time()
+        
+        reset_timer = start_time
+        reset_window = [0, 0, init_weight]
         # Begins dispensing until end condition has been met let_passed times
         await self.motor.jog(rpm)
         while passed < let_pass:
@@ -80,9 +84,19 @@ class Dispenser:
             # Logs time and weight data, sleeps until next sample
             curr_time = time.time() - start_time
             self.log_data(curr_time, med)
-            await asyncio.sleep(1/sample_rate)
 
-            print(f'Dispensed: {init_weight-med}')
+            # # Reset Feature
+            # if curr_time > reset_timer+5:
+            #     reset_timer = curr_time
+            #     reset_window = reset_window[1:] + [med]
+            #     if max(reset_window)-min(reset_window)<10:
+            #         await self.motor.jog(-2000)
+            #         await asyncio.sleep(3)
+            #         await self.motor.stop()
+            #         await self.dispense(serving=med-target, samples=samples, sample_rate=sample_rate, rpm=rpm, offset=offset, let_pass=let_pass)
+
+
+            await asyncio.sleep(1/sample_rate)
         # Stops motor once target weight has been dispensed
         await self.motor.stop()
         await self.motor.disable()

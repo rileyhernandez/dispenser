@@ -12,7 +12,8 @@ class Scale:
         for cell in range(len(self.cells)):
             self.cells[cell].setDeviceSerialNumber(SIN)
             self.cells[cell].setChannel(cell)
-            self.cells[cell].openWaitForAttachment(1000)
+            # self.cells[cell].openWaitForAttachment(1000)
+            self.cells[cell].openWaitForAttachment(2000)
             self.cells[cell].setDataInterval(self.cells[cell].getMinDataInterval())
         self.offset = 4122.65
         self.data = {'c0':[], 'c1':[], 'c2':[], 'c3':[], 'weights':[]}
