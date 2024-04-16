@@ -15,150 +15,86 @@ class Dispenser:
         self.data['time'] = []
         self.data['weight'] = []
 
-    async def weigh(self, samples=50):
-        """ Calls the Scale.weigh() method.
+    async def weigh(self, samples=50, sample_rate=100):
+        """ Calls the Scale.weigh() method. 
+        Default takes the median of 50 samples over 0.5 seconds.
         """
-        weight = await self.scale.weigh(samples=samples)
+        weight = await self.scale.weigh(samples=samples, sample_rate=sample_rate)
         return weight
 
     async def calibrate(self, test_mass=393.8):
         """Runs the calibration process in Scale.py to recalculate the scale coefficients.
+        Default uses the tape measure as the test mass.
         """
-        msg = await self.scale.calibrate()
+        msg = await self.scale.calibrate(test_mass=test_mass)
         print(msg)
         await self.tare()
 
-    
-    async def get_average_readings(self):
-        """DEFUNCT:
-        Finds the average reading of each load cell and returns them in an array.
-        """
-        tasks = [asyncio.create_task(self.scale.get_cell_average[cell]()) for cell in range(len(self.scale.cells))]
-        readings = await asyncio.gather(*tasks)
-        return readings
-
     async def live_weigh(self):
-        """Takes the instantaneous weight measurement."""
+        """Takes the instantaneous weight measurement.
+        """
         weight = await self.scale.live_weigh()
         return weight
 
-    async def dispense(self, serving, samples=200, sample_rate=50, rpm=500, offset=10, let_pass=3):
+    async def dispense(self, serving, sample_rate=50, cutoff=0.5, rpm=500, offset=10, let_pass=3):
         """Dispenses the serving amount in grams running the conveyor motor at the desired rpm and step.
         The speed is proportionally controlled and dispenser stops once it dispenses the target weight 
-        plus the offset amount
+        plus the offset amount.
         """
+        # Set LPF values
+        T = 1/sample_rate
+        RC = 1/(cutoff*2*np.pi)
+        a = T/(T+RC)
+        b = RC/(T+RC)
         # Clear saved data
         self.reset_data()
         # Starts motor and runs in reverse; this allows scale priming to include noise from the motor
         await self.motor.enable()
-        await self.motor.jog(-rpm)
-        # Primes scale data to fill up sampling window
-        window = []
-        for _ in range(samples):
-            reading = await self.live_weigh()
-            window += [reading]
-            await asyncio.sleep(1/sample_rate)
-        # Sets initial median, weight, and time
-        med = np.median(window)
-        init_weight = med
-        target = init_weight-serving
+        await asyncio.sleep(0.25)
+        await self.motor.jog(-2000)
+        await asyncio.sleep(3)
+        # Initialize variables for dispensing loop
         passed = 0
+        init_weight = await self.weigh(samples=200, sample_rate=100)
+        target = init_weight-serving
         start_time = time.time()
-        
-        reset_timer = start_time
-        reset_window = [0, 0, init_weight]
+        last_sent = 0
+        self.log_data(time=0, value=init_weight)
         # Begins dispensing until end condition has been met let_passed times
         await self.motor.jog(rpm)
         while passed < let_pass:
-            # Take new sample and move sampling window
+            # Take new sample and apply LPF
             reading = await self.live_weigh()
-            window = window[1:] + [reading]
-            med = np.median(window)
-            # Finds weight error and applies p-controller to conveyor speed
-            err = (med-target)/serving
-            new_rpm = min(max(err*rpm, 50), rpm)
-            # await self.motor.jog(new_rpm)
-            # Checks if end condition has been met
-            if med <= target+offset:
-                passed += 1
-            # Logs time and weight data, sleeps until next sample
+            weight = a*reading + b*self.data['weight'][-1]
             curr_time = time.time() - start_time
-            self.log_data(curr_time, med)
-
-            # # Reset Feature
-            # if curr_time > reset_timer+5:
-            #     reset_timer = curr_time
-            #     reset_window = reset_window[1:] + [med]
-            #     if max(reset_window)-min(reset_window)<10:
-            #         await self.motor.jog(-2000)
-            #         await asyncio.sleep(3)
-            #         await self.motor.stop()
-            #         await self.dispense(serving=med-target, samples=samples, sample_rate=sample_rate, rpm=rpm, offset=offset, let_pass=let_pass)
-
-
+            # Logs time and weight data
+            self.log_data(curr_time, weight)
+            # Finds weight error to calculate new conveyor speed for p-control
+            err = (weight-target)/serving
+            new_rpm = min(max(err*rpm, 50), rpm)
+            # Applies new RPM but limits motor changes to once every 0.25 seconds
+            if curr_time-last_sent > 0.25:
+                last_sent = curr_time
+                await self.motor.jog(new_rpm)
+            # Checks if end condition has been met
+            if weight <= target+offset:
+                passed += 1
+            # Sleeps until time for next sample
             await asyncio.sleep(1/sample_rate)
         # Stops motor once target weight has been dispensed
         await self.motor.stop()
-        await self.motor.disable()
         # Takes final weight measurement to display dispense amount and plots data
         end_weight = await self.weigh()
         print(f'Dispensed {init_weight-end_weight: .1f}')
-        self.plot_data(file='dispense_data.png')
-
-    async def dispense_old(self, serving, samples=50, sample_rate=2, outlier_ratio=0.5, rpm=500, offset=10, let_pass=3):
-        """DEFUNCT:
-        Dispenses the serving amount in grams running the conveyor motor at the desired rpm and step.
-        The speed is proportionally controlled and dispenser stops once it dispenses the target weight 
-        plus the offset amount
-        """
-        self.reset_data()
-        await self.motor.enable()
-        await self.motor.jog(-rpm)
-        await asyncio.sleep(20)
-
-        last_n = []
-        for _ in range(samples):
-            reading = await self.live_weigh()
-            last_n += [reading]
-            await asyncio.sleep(1/sample_rate)
-        # weight = await self.weigh()
-        # last_n = [weight for _ in range(samples)]
-        
-        avg = tools.prune(last_n)
-        init_weight = avg
-        target = init_weight-serving
-
-        passed = 0
-        start_time = time.time()
-        await self.motor.jog(rpm)
-        while passed < let_pass:
-            reading = await self.live_weigh()
-            # print('DEBUG: ', last_n)
-            last_n = last_n[1:] + [reading]
-            # print('DEBUG: ', last_n)
-            avg = tools.prune(last_n, outlier_ratio)
-
-            err = (avg-target)/serving
-            new_rpm = min(max(err*rpm, 50), rpm)
-            print(f'DEBUG: {err} {new_rpm}')
-            await self.motor.jog(new_rpm)
-            await asyncio.sleep(1/sample_rate)
-            
-            if avg <= target+offset:
-                passed += 1
-
-            curr_time = time.time() - start_time
-            self.log_data(curr_time, avg)
-        await self.motor.stop()
+        self.plot_data(file='dispense_data.png', normalize=False)
+        # Disables motor
         await self.motor.disable()
-        end_weight = await self.weigh()
-        print(f'Dispensed {init_weight-end_weight: .1f}')
-        self.plot_data(file='dispense_data.png')
 
-    async def tare(self, samples=100):
+    async def tare(self, samples=100, sample_rate=100):
         """Tares the system by recalibrating the offset value.
+        Default uses 100 samples over 1 second
         """
-        offset = await self.weigh(samples=samples)
+        offset = await self.weigh(samples=samples, sample_rate=sample_rate)
         self.scale.offset += offset
 
     def log_data(self, time, value, data='weight'):
@@ -171,8 +107,8 @@ class Dispenser:
         """Plots the time and weight data in the dataset
         """
         times = [t-self.data['time'][0] for t in self.data['time']]
-        avg = sum(self.data[data])/len(self.data[data])
         if normalize:
+            avg = sum(self.data[data])/len(self.data[data])
             weights = [self.data[data][weight]-avg for weight in range(len(self.data[data]))]
         else:
             weights = self.data[data]
@@ -181,13 +117,14 @@ class Dispenser:
         plt.xlabel('Time [s]')
         plt.ylabel('Weight [g]')
         plt.title(f'{data} {time.asctime(time.localtime())}')
-        # plt.text(time.asctime(time.localtime()))
         plt.grid()
         plt.savefig(file)
         print("STD: ", np.std(weights))
         print('Range: +/-', max(abs(max(weights)-avg*(not normalize)), abs(min(weights)-avg*(not normalize))))
 
     def plot_spec(self, data='weight', file='magnitude_spectrum.png', Fs=True):
+        """Plots frequency spectrum of measured weight data.
+        """
         weights = self.data[data]
         avg = sum(weights)/len(weights)
         weights_zeroed = [weight-avg for weight in weights]
@@ -197,8 +134,6 @@ class Dispenser:
             plt.magnitude_spectrum(weights_zeroed, 1/(self.data['time'][1]-self.data['time'][0]))
         else:
             plt.magnitude_spectrum(weights_zeroed)
-        # plt.xlim(0.01, 1)
-        # plt.ylim(0, Fs/2)
         plt.grid()
         plt.savefig(file)
 
@@ -268,6 +203,30 @@ class Dispenser:
             curr_time = time.time()-start_time
             self.data['time'] += [time.time()]
             self.data['weight'] += [weight]
+            time.sleep(1/sample_rate)
+
+        self.plot_data(file=filename) 
+
+    async def test_filter(self, duration=10, filename='filter_data.png', sample_rate=100, cutoff=0.5):
+        """Test function for collecting weight data without a filter.
+        """
+        self.reset_data()
+
+        T = 1/sample_rate
+        RC = 1/(cutoff*2*np.pi)
+        a = T/(T+RC)
+        b = RC/(T+RC)
+        
+        start_time = time.time()
+        curr_time = 0
+        while curr_time<duration:
+            weight = await self.live_weigh()
+            if self.data['weight'] == []:
+                filtered_weight = weight
+            else:
+                filtered_weight = a*weight + b*self.data['weight'][-1]
+            curr_time = time.time()-start_time
+            self.log_data(curr_time, filtered_weight)
             time.sleep(1/sample_rate)
 
         self.plot_data(file=filename) 

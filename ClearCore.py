@@ -19,7 +19,6 @@ class ClearCore:
         """
         message = HEADER + self.motor_id + cmd + str(amt) + CR
         resp = await tcp_write(self.ip_address, DRIVE_TCP_PORT, message)
-        # print(resp)
         if resp == HEADER+self.motor_id+'63':
             raise Exception(f'Invalid message sent to drive: {message} Resp: {resp}')
         return resp

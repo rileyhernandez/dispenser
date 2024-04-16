@@ -1,8 +1,7 @@
 from Phidget22.Phidget import *
 from Phidget22.Devices.VoltageRatioInput import *
-from tools import prune, dot_product
+from tools import dot_product
 import numpy as np
-import matplotlib.pyplot as plt
 import asyncio
 import csv
 
@@ -12,7 +11,6 @@ class Scale:
         for cell in range(len(self.cells)):
             self.cells[cell].setDeviceSerialNumber(SIN)
             self.cells[cell].setChannel(cell)
-            # self.cells[cell].openWaitForAttachment(1000)
             self.cells[cell].openWaitForAttachment(2000)
             self.cells[cell].setDataInterval(self.cells[cell].getMinDataInterval())
         self.offset = 4122.65
@@ -20,6 +18,8 @@ class Scale:
         self.import_coefficients()
 
     def import_coefficients(self):
+        """Imports saved scale coefficients from csv.
+        """
         with open('scale_coefficients.csv', newline='') as f:
             reader = csv.reader(f)
             data = list(reader)[0]
@@ -27,32 +27,31 @@ class Scale:
         self.coefficients = coefficients
     
     def write_coefficients(self):
+        """Writes newly calculated scale coefficients to csv
+        """
         new_coefficients = [self.coefficients]
         with open('scale_coefficients.csv', 'wt') as fp:
             writer = csv.writer(fp, delimiter=',')
             writer.writerows(new_coefficients)
 
-
     async def get_readings(self):
+        """Gets all cell readings from Phidget.
+        """
         coros = [self.get_cell_reading(cell) for cell in range(len(self.cells))]
         readings = await asyncio.gather(*coros)
         return readings
     
     async def get_cell_reading(self, cell):
+        """Gets reading of a particular cell from Phidget.
+        """
         reading = self.cells[cell].getVoltageRatio()
         self.data[f'c{cell}'] += [reading*self.coefficients[cell]]
         return reading
     
-    async def get_cell_average(self, cell, samples=100, sample_rate=25, outliers_ratio=0.5):
-        readings = []
-        for _ in range(samples):
-            reading = await self.get_cell_reading(cell)
-            readings += [reading]
-            await asyncio.sleep(1/sample_rate)
-        avg = prune(readings, outliers_ratio)
-        return avg
-    
     async def get_cell_median(self, cell, samples=1000, sample_rate=50):
+        """Finds the median of a given number of weight samples at a given rate.
+        Default is 1000 samples over 20 seconds.
+        """
         readings = []
         for _ in range(samples):
             reading = await self.get_cell_reading(cell)
@@ -62,7 +61,7 @@ class Scale:
         return med
 
     async def live_weigh(self):
-        """Measures instantaneous weight
+        """Measures instantaneous weight.
         """
         # Collects instantaneous cell readings
         readings = await self.get_readings()
@@ -72,8 +71,8 @@ class Scale:
         return weight-self.offset
 
     async def weigh(self, samples=100, sample_rate=50):
-        """Takes the average weight over a given time period for a given number of samples
-        at a given sample rate while removing outliers
+        """Takes the median weight over a given time period for a given number of samples
+        at a given sample rate while removing outliers.
         """
         coros = [self.get_cell_median(cell,samples,sample_rate) for cell in range(len(self.cells))]
         median_readings = await asyncio.gather(*coros)
@@ -123,36 +122,3 @@ class Scale:
     
     async def tare(self):
         self.offset += self.weigh()
-
-    # async def weigh(self, samples=100, sample_rate=25, outliers_ratio=0.50):
-    #     """Takes the average weight over a given time period for a given number of samples
-    #     at a given sample rate while removing outliers
-    #     """
-    #     weights = []
-    #     for _ in range(samples):
-    #         reading = await self.live_weigh()
-    #         weights += [reading]
-    #         await asyncio.sleep(1/sample_rate)
-    #     avg = prune(weights, outliers_ratio)
-    #     return avg
-
-
-    
-    # def set_cell(self):
-    #     self.input.setChannel(self.channel)
-    #     self.input.openWaitForAttachment(1000)
-    #     self.input.setDataInterval(self.input.getMinDataInterval())
-    
-    # async def read(self):
-    #     reading = self.input.getVoltageRatio()
-    #     return reading
-    
-    # async def average_reading(self, samples=64, sample_freq=0.008):
-    #     average = 0
-    #     for i in range(samples):
-    #         reading = await self.read()
-    #         # reading = self.input.getVoltageRatio()
-    #         average += reading
-    #         time.sleep(sample_freq)
-    #     average = average/samples
-    #     return average
