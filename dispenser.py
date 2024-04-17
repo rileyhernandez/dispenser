@@ -97,6 +97,15 @@ class Dispenser:
         offset = await self.weigh(samples=samples, sample_rate=sample_rate)
         self.scale.offset += offset
 
+    async def clear(self, rpm=2000, duration=30):
+        await self.motor.enable()
+        await asyncio.sleep(0.25)
+        await self.motor.jog(2000)
+        await asyncio.sleep(duration)
+        await self.motor.stop()
+        await asyncio.sleep(0.25)
+        await self.motor.disable()
+
     def log_data(self, time, value, data='weight'):
         """Adds the inputted time and weight recordings to the dataset.
         """
