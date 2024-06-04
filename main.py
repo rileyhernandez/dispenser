@@ -4,23 +4,27 @@ from ClearCore import ClearCore
 from Dispenser import Dispenser
 
 
-s = Scale(716692)
+# s = Scale(716692)
 # s = Scale(716710)
 
 m = ClearCore('192.168.1.11', 0, 6400)
 
-d = Dispenser(m, s)
+# d = Dispenser(m, s)
 
-run = lambda x: asyncio.run(d.dispense(x, offset=5))
+# run = lambda x: asyncio.run(d.dispense(x, offset=5))
 
-def kill():
-    print(':( oops...')
-    asyncio.run(m.stop())
-    asyncio.run(m.disable())
+# def kill():
+#     print(':( oops...')
+#     asyncio.run(m.stop())
+#     asyncio.run(m.disable())
 
-def end():
-    kill()
-    exit()
+# def end():
+#     kill()
+#     exit()
+
+sns = [716620, 716623, 716625, 716709]
+
+scales = [Scale(sn) for sn in sns]
 
 # async def test(dispenser=d):
 #     while True:

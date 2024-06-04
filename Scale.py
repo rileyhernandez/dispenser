@@ -7,6 +7,7 @@ import csv
 
 class Scale:
     def __init__(self, SIN):
+        self.sin = SIN
         self.cells = [VoltageRatioInput() for _ in range(4)]
         for cell in range(len(self.cells)):
             self.cells[cell].setDeviceSerialNumber(SIN)
@@ -22,10 +23,12 @@ class Scale:
         """
         with open('data/scale_coefficients.csv', newline='') as f:
             reader = csv.reader(f)
-            data = list(reader)[0]
-        coefficients = [float(i) for i in data]
-        self.coefficients = coefficients
-    
+            for row in reader:
+                if row[0] == str(self.sin):
+                    coefficients = [float(i) for i in row[1:5]]
+                    self.coefficients = coefficients
+                    break
+
     def write_coefficients(self):
         """Writes newly calculated scale coefficients to csv
         """
@@ -33,6 +36,28 @@ class Scale:
         with open('data/scale_coefficients.csv', 'wt') as fp:
             writer = csv.writer(fp, delimiter=',')
             writer.writerows(new_coefficients)
+
+    def write_coefficients(self):
+        """Writes newly calculated scale coefficients to csv for a specific row."""
+        updated = False
+        new_data = []
+        with open('data/scale_coefficients.csv', 'r', newline='') as f:
+            reader = csv.reader(f)
+            for row in reader:
+                if row[0] == str(self.sin):
+                    # Assuming self.coefficients is a list of the new coefficients
+                    new_data.append([row[0]] + self.coefficients)
+                    updated = True
+                else:
+                    new_data.append(row)
+
+        if not updated:
+            raise Exception("SIN not found in csv")
+        
+        with open('data/scale_coefficients.csv', 'w', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerows(new_data)
+
 
     async def get_readings(self):
         """Gets all cell readings from Phidget.
@@ -44,6 +69,7 @@ class Scale:
     async def get_cell_reading(self, cell):
         """Gets reading of a particular cell from Phidget.
         """
+        print('DEBUG: ', cell)
         reading = self.cells[cell].getVoltageRatio()
         self.data[f'c{cell}'] += [reading*self.coefficients[cell]]
         return reading
@@ -118,12 +144,12 @@ class Scale:
         self.write_coefficients()
 
         # Tares scale and ends method
-        # await self.tare()
-        # self.offset = await self.weigh()
+        await self.tare()
         return 'Calibration Successful'
     
     async def tare(self):
-        self.offset += self.weigh()
+        weight = await self.weigh()
+        self.offset += weight
         self.clear_data()
 
     def clear_data(self):
