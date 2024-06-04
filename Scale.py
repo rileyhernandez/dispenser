@@ -14,13 +14,13 @@ class Scale:
             self.cells[cell].openWaitForAttachment(2000)
             self.cells[cell].setDataInterval(self.cells[cell].getMinDataInterval())
         self.offset = 4122.65
-        self.data = {'c0':[], 'c1':[], 'c2':[], 'c3':[], 'weights':[]}
+        self.data = {'c0':[], 'c1':[], 'c2':[], 'c3':[], 'weight':[]}
         self.import_coefficients()
 
     def import_coefficients(self):
         """Imports saved scale coefficients from csv.
         """
-        with open('scale_coefficients.csv', newline='') as f:
+        with open('data/scale_coefficients.csv', newline='') as f:
             reader = csv.reader(f)
             data = list(reader)[0]
         coefficients = [float(i) for i in data]
@@ -30,7 +30,7 @@ class Scale:
         """Writes newly calculated scale coefficients to csv
         """
         new_coefficients = [self.coefficients]
-        with open('scale_coefficients.csv', 'wt') as fp:
+        with open('data/scale_coefficients.csv', 'wt') as fp:
             writer = csv.writer(fp, delimiter=',')
             writer.writerows(new_coefficients)
 
@@ -74,6 +74,7 @@ class Scale:
         """Takes the median weight over a given time period for a given number of samples
         at a given sample rate while removing outliers.
         """
+        self.clear_data()
         coros = [self.get_cell_median(cell,samples,sample_rate) for cell in range(len(self.cells))]
         median_readings = await asyncio.gather(*coros)
         weight = dot_product(median_readings, self.coefficients)
@@ -84,6 +85,7 @@ class Scale:
         load cell variation and assembly tolerance.
         Then the system is tared.
         """
+        self.clear_data()
         # Conducts weight trials and collects data
         A, b = [], []
         for _ in range(len(self.cells)):
@@ -122,3 +124,7 @@ class Scale:
     
     async def tare(self):
         self.offset += self.weigh()
+        self.clear_data()
+
+    def clear_data(self):
+        self.data = {'c0':[], 'c1':[], 'c2':[], 'c3':[], 'weight':[]}

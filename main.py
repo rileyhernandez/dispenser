@@ -1,7 +1,7 @@
 import asyncio
 from Scale import Scale
 from ClearCore import ClearCore
-from dispenser import Dispenser
+from Dispenser import Dispenser
 
 
 s = Scale(716692)
@@ -22,8 +22,15 @@ def end():
     kill()
     exit()
 
-async def test(dispenser=d):
-    while True:
-        weight = await dispenser.live_weigh()
-        print(weight)
-        await asyncio.sleep(0.5)
+# async def test(dispenser=d):
+#     while True:
+#         weight = await dispenser.live_weigh()
+#         print(weight)
+#         await asyncio.sleep(0.5)
+
+#      self.cells = [VoltageRatioInput() for _ in range(4)]
+#         for cell in range(len(self.cells)):
+#             self.cells[cell].setDeviceSerialNumber(SIN)
+#             self.cells[cell].setChannel(cell)
+#             self.cells[cell].openWaitForAttachment(2000)
+#             self.cells[cell].setDataInterval(self.cells[cell].getMinDataInterval())

@@ -1,6 +1,8 @@
 from typing import Dict
-from dispenser import Dispenser
+from Dispenser import Dispenser
 import asyncio
+
+from typing import Awaitable
 
 HEADER = '\x02'
 CR = '\x13'
@@ -8,13 +10,16 @@ CR = '\x13'
 class Client:
     def __init__(self, dispensers:Dict[str, Dispenser]):
         self.dispensers = dispensers # dictionary of dispensers with key='D0'
+        self.task: None | Awaitable = None
 
     async def run(self):
         """Waits for a message; once one is received it coruns receive() and read().
         If another message is received, it is placed in the queue by its priority.
         """
-        msg = await self.receive()
-
+        if self.task:
+            asyncio.gather(self.receive(), self.task())
+        else:
+            self.task = await self.receive()
 
     async def receive(self):
         """Waits for a message and returns the task encoded in the message.
@@ -23,9 +28,13 @@ class Client:
         task = await self.read(msg)
         return task
 
-    async def read(self, msg:str) -> str:
+    async def read(self, msg:str) -> Awaitable:
         """Takes an incoming message and returns the encoded message.
         """
+
+
+        # msg = socket.recv()
+
         try:
             assert msg[0] == HEADER
             assert msg[-1] == CR
@@ -35,7 +44,7 @@ class Client:
         except:
             raise Exception('Invalid Command')
         match command:
-            case 'DP':
+            case 'DS':
                 task = asyncio.create_task(self.dispense(dispenser_id, serving=amount))
             case 'CA':
                 task = asyncio.create_task(self.calibrate(dispenser_id, test_mass=amount))
@@ -47,6 +56,9 @@ class Client:
                 task = asyncio.create_task(self.clear(dispenser_id))
             case 'ST':
                 task = asyncio.create_task(self.stop(dispenser_id))
+            case None:
+                task = None
+        self.task = task
         return task
     
     async def dispense(self, dispenser_id, serving) -> str:

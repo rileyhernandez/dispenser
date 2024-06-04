@@ -127,7 +127,7 @@ class Dispenser:
         plt.ylabel('Weight [g]')
         plt.title(f'{data} {time.asctime(time.localtime())}')
         plt.grid()
-        plt.savefig(file)
+        plt.savefig(f'data/{file}')
         print("STD: ", np.std(weights))
         print('Range: +/-', max(abs(max(weights)-avg*(not normalize)), abs(min(weights)-avg*(not normalize))))
 
@@ -144,7 +144,7 @@ class Dispenser:
         else:
             plt.magnitude_spectrum(weights_zeroed)
         plt.grid()
-        plt.savefig(file)
+        plt.savefig(f'data/{file}')
 
     def reset_data(self, data='weight'):
         """Clears the dataset.
